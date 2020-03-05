@@ -1,92 +1,69 @@
 import { withPluginApi } from "discourse/lib/plugin-api";
-import { Tag } from "discourse/lib/to-markdown";
-import ComposerController from "discourse/controllers/composer";
+import { h } from "virtual-dom";
+import { ajax } from "discourse/lib/ajax";
+function initialize(api) {
+  const allow_user_locale = Discourse.SiteSettings.allow_user_locale;
+  const currentUser = api.getCurrentUser();
+  if(!allow_user_locale || !currentUser) return;
+    
+  
+  alert(currentUser.get("username"))
+  alert(Discourse.User.current().get("username"))
+  var username = currentUser.get("username");
 
-function spoil($elem) {
-  $(".spoiler", $elem)
-    .removeClass("spoiler")
-    .addClass("spoiled")
-    .spoil();
-}
-
-function initializeSpoiler(api) {
-  api.decorateCooked(spoil, { id: "spoiler-alert" });
-
-  api.addToolbarPopupMenuOptionsCallback(() => {
-    return {
-      action: "insertSpoiler",
-      icon: "magic",
-      label: "spoiler.title"
-    };
-  });
-
-  ComposerController.reopen({
-    actions: {
-      insertSpoiler() {
-        this.get("toolbarEvent").applySurround(
-          "[spoiler]",
-          "[/spoiler]",
-          "spoiler_text",
-          { multiline: false, useBlockMode: true }
-        );
-      }
+  api.createWidget("lang-list", {
+    html(attrs){
+      return h("li",{className:"set_li select-kit-row",lang:attrs.value},attrs.name);
+    },
+    click(event){
+      
+       alert(this.attrs.value)
+       ajax("/u/" + username + ".json", {
+            type: "PUT",
+            data: {
+              locale: this.attrs.value,
+            }
+            })
+            .then((result) => {
+              window.location.reload()
+            })
+            .catch(error => {
+              if (error) {
+              console.log(error)
+              }
+            })
+            .finally(() => {});
     }
+
+  })
+
+  api.createWidget("lang-default", {
+    html(){
+      return h("span.set_span","中文");
+    },
+    click(){
+
+    }
+
+  })
+
+
+  api.decorateWidget("header-buttons:before", helper => {
+    var html = []
+    const langs = JSON.parse(Discourse.SiteSettings.available_locales)
+    langs.map(v =>{
+      var item = helper.attach('lang-list',v) ;
+      html.push(item) 
+    })
+    return h("div.select-kit.combo-box.set_div",
+      [helper.attach('lang-default') ,
+      h("ul.select-kit-collection.set_ul",html)]
+    );
   });
-
-  if (Tag) {
-    Tag.prototype.decorate = function(text) {
-      const attr = this.element.attributes;
-      if (attr.class === "spoiled") {
-        this.prefix = "[spoiler]";
-        this.suffix = "[/spoiler]";
-      }
-
-      if (this.prefix || this.suffix) {
-        text = [this.prefix, text, this.suffix].join("");
-      }
-
-      if (this.inline) {
-        text = " " + text + " ";
-      }
-
-      return text;
-    };
-
-    Tag.block = function(name, prefix, suffix) {
-      return class extends Tag {
-        constructor() {
-          super(name, prefix, suffix);
-          this.gap = "\n\n";
-        }
-
-        decorate(text) {
-          const attr = this.element.attributes;
-          const parent = this.element.parent;
-
-          if (this.name === "p" && parent && parent.name === "li") {
-            // fix for google docs
-            this.gap = "";
-          }
-
-          if (this.name === "div" && attr.class === "spoiled") {
-            this.prefix = "[spoiler]";
-            this.suffix = "[/spoiler]";
-            text = text.trim();
-          }
-
-          return `${this.gap}${this.prefix}${text}${this.suffix}${this.gap}`;
-        }
-      };
-    };
-  }
 }
-
 export default {
-  name: "apply-spoilers",
-  initialize(container) {
-    const siteSettings = container.lookup("site-settings:main");
-    if (siteSettings.spoiler_enabled) {
-      withPluginApi("0.5", initializeSpoiler);
-    }
+  name: "theme",
+  initialize() {
+    withPluginApi("0.8.7", initialize);
   }
 };
